@@ -14,9 +14,11 @@ import (
 
 type FetchTagsConfig struct {
 	Tags                    []string
+	TagsFromEC2MetaData     []string
 	TagsFromEC2             bool
 	TagsFromEC2Tags         bool
 	TagsFromGCP             bool
+	TagsFromGCPMetaData     []string
 	TagsFromGCPLabels       bool
 	TagsFromHost            bool
 	WaitForEC2TagsTimeout   time.Duration
@@ -103,7 +105,23 @@ func FetchTags(l *logger.Logger, conf FetchTagsConfig) []string {
 	}
 
 	// Attempt to add the Google Cloud meta-data
-	if conf.TagsFromGCP {
+	if len(conf.TagsFromGCPMetaData) > 0 {
+		fmt.Printf("conf.TagsFromGCPMetaData = %#v \n", conf.TagsFromGCPMetaData)
+
+		gcpTags, err := GCPMetaData{}.GetPaths(conf.TagsFromGCPMetaData)
+
+		fmt.Printf("gcpTags = %#v \n", gcpTags)
+
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+		} else {
+			for tag, value := range gcpTags {
+				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
+
+	} else if conf.TagsFromGCP {
 		gcpTags, err := GCPMetaData{}.Get()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.

@@ -10,6 +10,21 @@ import (
 type GCPMetaData struct {
 }
 
+func (e GCPMetaData) GetPaths(derp []string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	for key, path := range splitKeyValuePairs(derp) {
+		value, err := metadata.Get(path)
+		if err != nil {
+			return nil, err
+		} else {
+			result[key] = value
+		}
+	}
+
+	return result, nil
+}
+
 func (e GCPMetaData) Get() (map[string]string, error) {
 	result := make(map[string]string)
 
@@ -72,4 +87,22 @@ func parseRegionFromZone(zone string) (string, error) {
 		return "", errors.New("cannot parse zone: " + zone)
 	}
 	return zone[:index], nil
+}
+
+// TODO: Seems quite crap, dunno will ask lox
+func splitKeyValuePairs(pairs []string) map[string]string {
+	result := make(map[string]string)
+
+	for _, pair := range pairs {
+		key, value := splitPair(pair)
+		result[key] = value
+	}
+
+	return result
+}
+
+// TODO: Seems quite crap, dunno will ask lox
+func splitPair(s string) (string, string) {
+	x := strings.Split(s, "=")
+	return x[0], x[1]
 }
