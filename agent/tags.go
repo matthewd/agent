@@ -108,7 +108,7 @@ func FetchTags(l *logger.Logger, conf FetchTagsConfig) []string {
 	if len(conf.TagsFromGCPMetaData) > 0 {
 		fmt.Printf("conf.TagsFromGCPMetaData = %#v \n", conf.TagsFromGCPMetaData)
 
-		gcpTags, err := GCPMetaData{}.GetPaths(conf.TagsFromGCPMetaData)
+		gcpTags, err := GCPMetaData{}.GetSuffixes(conf.TagsFromGCPMetaData)
 
 		fmt.Printf("gcpTags = %#v \n", gcpTags)
 
