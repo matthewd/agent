@@ -10,19 +10,15 @@ import (
 	"testing"
 )
 
-func TestGCPMetaDataGetSuffix(t *testing.T) {
+func TestGCPMetaDataGetSuffixes(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
 		switch path := r.URL.EscapedPath(); path {
 		case "/computeMetadata/v1/value":
-			fmt.Fprintf(w, "Wiggy Wiggy")
+			fmt.Fprintf(w, "I could live on only burritos for the rest of my life")
 		case "/computeMetadata/v1/nested/paths/work":
 			fmt.Fprintf(w, "Velociraptors are terrifying")
-		case "/computeMetadata/v1/work":
-			fmt.Fprintf(w, "This is a silly path")
-		case "/computeMetadata/v1/messed-up":
-			fmt.Fprintf(w, "Sourdough is the greatest")
 		default:
 			t.Fatalf("Error %q", path)
 		}
@@ -38,12 +34,10 @@ func TestGCPMetaDataGetSuffix(t *testing.T) {
 	defer os.Setenv("GCE_METADATA_HOST", old)
 	os.Setenv("GCE_METADATA_HOST", url.Host)
 
-	values, err := GCPMetaData{}.GetSuffixes([]string{
-		"simple=value",
-		"nested=nested/paths/work",
-		"silly_path=silly/paths/../../work",
-		"weird_path=///messed-up",
-		"weird key=value",
+	values, err := GCPMetaData{}.GetSuffixes(map[string]string{
+		"truth":     "value",
+		"scary":     "nested/paths/work",
+		"weird key": "value",
 	})
 
 	if err != nil {
@@ -51,10 +45,8 @@ func TestGCPMetaDataGetSuffix(t *testing.T) {
 	}
 
 	assert.Equal(t, values, map[string]string{
-		"simple":     "Wiggy Wiggy",
-		"nested":     "Velociraptors are terrifying",
-		"silly_path": "This is a silly path",
-		"weird_path": "Sourdough is the greatest",
-		"weird key":  "Wiggy Wiggy",
+		"truth":     "I could live on only burritos for the rest of my life",
+		"scary":     "Velociraptors are terrifying",
+		"weird key": "I could live on only burritos for the rest of my life",
 	})
 }

@@ -2,8 +2,6 @@ package agent
 
 import (
 	"errors"
-	"net/url"
-	"path/filepath"
 	"strings"
 
 	"cloud.google.com/go/compute/metadata"
@@ -13,14 +11,8 @@ type GCPMetaData struct {
 }
 
 // TODO name this better
-func (e GCPMetaData) GetSuffixes(s []string) (map[string]string, error) {
-	// TODO Should this be additive on top of `Get()`?
+func (e GCPMetaData) GetSuffixes(suffixes map[string]string) (map[string]string, error) {
 	result := make(map[string]string)
-
-	suffixes, err := parseMetaDataValueSuffixes(s)
-	if err != nil {
-		return result, err
-	}
 
 	for key, suffix := range suffixes {
 		value, err := metadata.Get(suffix)
@@ -96,33 +88,4 @@ func parseRegionFromZone(zone string) (string, error) {
 		return "", errors.New("cannot parse zone: " + zone)
 	}
 	return zone[:index], nil
-}
-
-// TODO: Seems quite crap, dunno will ask lox
-func parseMetaDataValueSuffixes(suffixes []string) (map[string]string, error) {
-	result := make(map[string]string)
-
-	for _, pair := range suffixes {
-		x := strings.Split(pair, "=")
-		// TODO: Should we just let people have stupid keys? Probably?
-		key := strings.ToLower(strings.Trim(x[0], " "))
-
-		uri, err := url.Parse(x[1])
-		if err != nil {
-			return result, err
-		}
-
-		meta_data_path := filepath.Clean(uri.Path)
-
-		if filepath.IsAbs(meta_data_path) {
-			meta_data_path, err = filepath.Rel("/", meta_data_path)
-			if err != nil {
-				return result, err
-			}
-		}
-
-		result[key] = meta_data_path
-	}
-
-	return result, nil
 }

@@ -7,6 +7,12 @@ import (
 type EC2MetaData struct {
 }
 
+func (e EC2MetaData) GetSuffixes(suffixes map[string]string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	return result, nil
+}
+
 func (e EC2MetaData) Get() (map[string]string, error) {
 	sess, err := awsSession()
 	if err != nil {
