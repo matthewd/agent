@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -218,14 +221,15 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 					// is possible
 					idleMonitor.MarkIdle(a.agent.UUID)
 
-					// But only terminate if everyone else is also idle
-					if idleMonitor.Idle() {
-						a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
-							a.agentConfiguration.DisconnectAfterIdleTimeout)
+					exitBecauseIdle, resetIdleTimer, err := a.Idle(idleMonitor, lastActionTime)
+					if err != nil {
+						return err
+					}
+
+					if exitBecauseIdle {
 						return nil
-					} else {
-						a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
-							time.Since(lastActionTime).Seconds())
+					} else if resetIdleTimer {
+						lastActionTime = time.Now()
 					}
 				}
 			}
@@ -238,6 +242,52 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 			return nil
 		}
 	}
+}
+
+func (a *AgentWorker) Idle(idleMonitor *IdleMonitor, lastActionTime time.Time) (bool, bool, error) {
+	idleMonitor.Lock()
+	defer idleMonitor.Unlock()
+
+	if !idleMonitor._Idle() {
+		a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
+			time.Since(lastActionTime).Seconds())
+		return false, false, nil
+	}
+
+	p, err := hook.Find(a.agentConfiguration.HooksPath, "idle")
+	if err != nil {
+		if os.IsNotExist(err) {
+			a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
+				a.agentConfiguration.DisconnectAfterIdleTimeout)
+
+			return true, false, nil
+		} else {
+			return false, false, err
+		}
+	}
+	sh, err := shell.New()
+	if err != nil {
+		return false, false, err
+	}
+
+	a.logger.Info("All agents have been idle for %d seconds. Running idle hook...",
+		a.agentConfiguration.DisconnectAfterIdleTimeout)
+
+	sh.Promptf("%s", p)
+	if err = sh.RunScript(p, nil); err != nil {
+		if shell.IsExitError(err) {
+			a.logger.Info("Idle hook returned exit status '%d'; resetting timeout",
+				shell.GetExitCode(err))
+			return false, true, nil
+		} else {
+			return false, false, err
+		}
+	}
+
+	a.logger.Info("Idle hook exited successfully. Disconnecting...",
+		a.agentConfiguration.DisconnectAfterIdleTimeout)
+
+	return true, false, nil
 }
 
 // Stops the agent from accepting new work and cancels any current work it's
@@ -529,6 +579,10 @@ func NewIdleMonitor(totalAgents int) *IdleMonitor {
 		totalAgents: totalAgents,
 		idle:        map[string]struct{}{},
 	}
+}
+
+func (i *IdleMonitor) _Idle() bool {
+	return len(i.idle) == i.totalAgents
 }
 
 func (i *IdleMonitor) Idle() bool {
